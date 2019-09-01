@@ -1,0 +1,8 @@
+# Project exclude paths
+/configuration/configuration-api/target/
+/configuration/local-configuration/target/
+/configuration/mongodb-configuration/target/
+/logging/target/
+/messaging/target/
+/microservices/target/
+/types/target/
