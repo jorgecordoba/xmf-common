@@ -1,20 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="CompilerConfiguration">
-    <annotationProcessing>
-      <profile name="Maven default annotation processors profile" enabled="true">
-        <sourceOutputDir name="target/generated-sources/annotations" />
-        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <module name="types" />
-        <module name="logging" />
-        <module name="mongodb-configuration" />
-        <module name="messaging" />
-        <module name="configuration-api" />
-        <module name="microservices" />
-        <module name="local-configuration" />
-      </profile>
-    </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="configuration" target="1.6" />
       <module name="configuration-api" target="1.6" />
@@ -24,7 +10,6 @@
       <module name="microservices" target="1.6" />
       <module name="mongodb-configuration" target="1.6" />
       <module name="types" target="1.6" />
-      <module name="xmf-common" target="1.6" />
     </bytecodeTargetLevel>
   </component>
 </project>

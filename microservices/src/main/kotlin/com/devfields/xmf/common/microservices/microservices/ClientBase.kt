@@ -4,6 +4,7 @@ import com.devfields.xmf.common.configuration.configuration.ConfigurationStore
 import com.devfields.xmf.common.logging.XmfLoggerFactory
 import com.devfields.xmf.common.types.Version
 import com.codahale.metrics.MetricRegistry
+import org.eclipse.jetty.server.Authentication
 import javax.jms.Session
 
 /**
@@ -18,6 +19,7 @@ open class ClientBase @JvmOverloads constructor(configurationStore: Configuratio
     private val operations : MutableList<ApiOperation<out Command>> = mutableListOf()
     private val metrics : MetricRegistry = metricsReg
     private val logger = XmfLoggerFactory.getLogger(this::class.java)
+    private val listeners = mutableListOf<String>()
 
     private fun send(cmd : Command, session: Session){
         synchronized(this.session) {
@@ -46,6 +48,23 @@ open class ClientBase @JvmOverloads constructor(configurationStore: Configuratio
         var op = ApiOperation(configuration, source, serviceVersion, instanceName, "${this.serviceName}.${classReference.simpleName}", classReference, handler)
         operations.add(op)
         op.start()
+    }
+
+    suspend fun <T: Response>sendAndWait(cmd: Command) : T {
+        throw NotImplementedError()
+    }
+
+    private fun internalResponseHandler(response : Response) : HandleAction {
+        return HandleAction.Commit;
+    }
+
+    protected fun <T : Response>sendAsync(source: String, classReference:Class<T>) : T {
+        if (!listeners.contains(classReference.name)) {
+            var op = ApiOperation(configuration, source, serviceVersion, instanceName, "${this.serviceName}.${classReference.simpleName}", classReference, this::internalResponseHandler)
+            operations.add(op)
+            op.start()
+        }
+        throw NotImplementedError()
     }
 
     override fun stop() {
