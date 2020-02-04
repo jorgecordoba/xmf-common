@@ -9,8 +9,8 @@ import org.joda.time.DateTime
 data class MessageHeader(val type: String,
                          val version : Version,
                          val context: MessageContext,
-                         var source : Destination,
-                         var destination : Destination) {
+                         var source : Destination? = null,
+                         var destination : Destination? = null) {
 
     var messageDate : DateTime = DateTime.now()
 
