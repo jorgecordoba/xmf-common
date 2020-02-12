@@ -1,4 +1,4 @@
-package com.devfields.xmf.common.configuration.impl.impl
+package com.devfields.xmf.common.configuration.mongo
 
 import com.devfields.xmf.common.configuration.configuration.ConfigChangeHandler
 import java.util.ArrayList

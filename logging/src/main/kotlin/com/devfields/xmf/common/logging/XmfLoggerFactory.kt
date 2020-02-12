@@ -7,10 +7,8 @@ import org.slf4j.LoggerFactory
  */
 object XmfLoggerFactory {
 
-    val loggerpPrefix = "xmf"
-
     fun getLogger(name : String) : XmfLogger {
-        return XmfLogger(LoggerFactory.getLogger("$loggerpPrefix.$name"))
+        return XmfLogger(LoggerFactory.getLogger("$name"))
     }
 
     fun getLogger(clazz: Class<out Any>) : XmfLogger {

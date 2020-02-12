@@ -23,9 +23,12 @@ allprojects {
     group = 'com.devfields.xmf.common'
     version = '1.0-SNAPSHOT'
 
+    apply plugin: 'maven-publish'
+
     apply plugin: "kotlin"
 
     repositories {
+        mavenLocal()
         mavenCentral()
         jcenter()
     }
@@ -48,6 +51,14 @@ allprojects {
     }
     compileTestKotlin {
         kotlinOptions.jvmTarget = "1.8"
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+            }
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-package com.devfields.xmf.common.configuration.impl.impl
+package com.devfields.xmf.common.configuration.mongo
 
 import com.devfields.xmf.common.configuration.configuration.*
 import com.devfields.xmf.common.configuration.impl.LocalConfigStore
@@ -19,7 +19,7 @@ import java.util.regex.Pattern
 /**
  * Created by jco27 on 19/02/2017.
  */
-class MongoDbStore : ObservableConfigurationStore {
+class MongoDbStore : ObservableConfigurationStore, AutoCloseable {
 
     private var mongoClient: MongoClient? = null
     private var mongoDatabase: MongoDatabase? = null
@@ -301,21 +301,24 @@ class MongoDbStore : ObservableConfigurationStore {
     private fun getConfigurationEntry(key: String, doc: Document): ConfigurationEntry? {
         try {
             val value = doc.getString(getPropertyName(key))
-            val version: Version
-            val modifiedDate: DateTime
-            if (doc.containsKey("_version"))
-                version = doc.get("_version", Version::class.java)
-            else
-                version = Version(1, 0)
+            if (value.isNullOrBlank())
+                return null
+            val version: Version = if (doc.containsKey("_version")) {
+                Version.TryParse(doc.getString("_version")) ?: Version(1,0)
+            }
+            else {
+                Version(1, 0)
+            }
 
-            if (doc.containsKey("_modifiedDate"))
-                modifiedDate = doc.get("_modifiedDate", DateTime::class.java)
+            val modifiedDate: DateTime = if (doc.containsKey("_modifiedDate"))
+                DateTime(doc.get("_modifiedDate"))
             else
-                modifiedDate = DateTime.now()
+                DateTime.now()
 
             return ConfigurationEntry(key, value, modifiedDate, version)
         } catch (ex: ClassCastException) {
             // TODO: Log the error
+            logger.xmf_error_log(serviceName, instanceName, "Invalid data found in configuration entry $ex")
             return null
         }
 
@@ -344,5 +347,10 @@ class MongoDbStore : ObservableConfigurationStore {
 
         val observers = observersMap[key]!!
         observers.handlers.remove(handler)
+    }
+
+    override fun close() {
+        this.mongoClient?.close()
+        this.executor?.shutdownNow()
     }
 }
