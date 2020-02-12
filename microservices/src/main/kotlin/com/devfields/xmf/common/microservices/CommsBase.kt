@@ -1,10 +1,12 @@
-package com.devfields.xmf.common.microservices.microservices
+package com.devfields.xmf.common.microservices
 
 import com.devfields.xmf.common.configuration.configuration.ConfigurationStore
 import com.devfields.xmf.common.configuration.configuration.ConfigurationException
 import com.devfields.xmf.common.logging.XmfLoggerFactory
 import com.devfields.xmf.common.messaging.MessageHeader
 import com.devfields.xmf.common.serialization.JacksonHelper
+import java.net.URI
+import java.net.URL
 import java.util.*
 import javax.jms.*
 import javax.naming.CommunicationException
@@ -15,7 +17,7 @@ import javax.naming.InitialContext
 /**
  * Created by jco27 on 02/01/2017.
  */
-abstract class CommsBase(val configuration : ConfigurationStore, val serviceName: String, val instanceName : String){
+abstract class CommsBase(val configuration : ConfigurationStore, val serviceName: String, val instanceName : String, clientId : String){
 
     protected val confFactoryKey = "broker.connectionFactory.name"
     protected val confFactoryDefault = "ConnectionFactory"
@@ -32,7 +34,7 @@ abstract class CommsBase(val configuration : ConfigurationStore, val serviceName
     private val logger = XmfLoggerFactory.getLogger(this::class.java)
 
     init {
-        val env = Hashtable<Any, String>()
+        val env = Hashtable<Any, Any>()
 
         val providerUrl = configuration.readValue(confProviderUrlKey)
         val user = configuration.readValue(confBrokerUserKey)
@@ -55,15 +57,15 @@ abstract class CommsBase(val configuration : ConfigurationStore, val serviceName
             throw ConfigurationException("Unable to obtain value for password on $confBrokerPasswordKey")
 
         env[Context.INITIAL_CONTEXT_FACTORY] = initialContextFactory
-        env[Context.PROVIDER_URL] = providerUrl
+        env[Context.PROVIDER_URL] = URI(providerUrl).toString()
         env[Context.SECURITY_PRINCIPAL] = user
         env[Context.SECURITY_CREDENTIALS] = password
         env["connectionFactoryNames"] = connectionFactoryName
 
         ctx = InitialContext(env)
         val factory = ctx.lookup(connectionFactoryName) as ConnectionFactory
-        connection = factory.createConnection()
-        connection.clientID = "$serviceName.$instanceName"
+        connection = factory.createConnection(user, password)
+        connection.clientID = clientId
         session = connection.createSession(true, Session.SESSION_TRANSACTED)
     }
 
@@ -76,16 +78,16 @@ abstract class CommsBase(val configuration : ConfigurationStore, val serviceName
     }
 
     fun validateHeader(header : MessageHeader?) : Boolean {
-        return header != null && header.type != null && header.version != null && header.destination != null
+        return header?.type != null && header.destination != null
     }
 
     fun createMessage(command : Command) : TextMessage{
         if (!validateHeader(command.header))
             throw IllegalArgumentException("Invalid message header for message")
 
-        var serialized = JacksonHelper.serialize(command)
+        val serialized = JacksonHelper.serialize(command)
 
-        var msg = session.createTextMessage(serialized)
+        val msg = session.createTextMessage(serialized)
         msg.setStringProperty("XMF_EventId", command.header?.type)
         msg.setStringProperty("XMF_Version_Major", command.header?.version?.major.toString())
         msg.setStringProperty("XMF_Version_Minor", command.header?.version?.minor.toString())
@@ -112,10 +114,10 @@ abstract class CommsBase(val configuration : ConfigurationStore, val serviceName
                 val location = configuration.readValue("services.${cmd.header?.destination?.name}.location") ?:
                         throw CommunicationException("Unable to find the address for the specified destination ${cmd.header?.destination?.name}")
 
-                var dest = if (toTopic) session.createTopic(location) else session.createQueue(location)
+                val dest = if (toTopic) session.createTopic(location) else session.createQueue(location)
 
                 val producer = session.createProducer(dest)
-                var msg = createMessage(cmd)
+                val msg = createMessage(cmd)
                 producer.send(msg)
                 session.commit()
                 producer.close()

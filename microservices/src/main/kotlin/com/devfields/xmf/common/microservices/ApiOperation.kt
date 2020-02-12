@@ -1,4 +1,4 @@
-package com.devfields.xmf.common.microservices.microservices
+package com.devfields.xmf.common.microservices
 
 import com.devfields.xmf.common.configuration.configuration.ConfigurationStore
 import com.devfields.xmf.common.configuration.configuration.ObservableConfigurationStore
@@ -11,6 +11,8 @@ import com.codahale.metrics.Timer
 import org.apache.commons.lang.exception.ExceptionUtils
 import javax.inject.Inject
 import javax.jms.*
+import kotlin.reflect.KClass
+import kotlin.reflect.full.isSubclassOf
 
 /**
  * Created by jco27 on 27/12/2016.
@@ -19,11 +21,12 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
                                                                       serviceName : String,
                                                                       val serviceVersion : Version,
                                                                       instanceName : String,
+                                                                      listenerInstance: Int,
                                                                       val commandName : String,
-                                                                      val classReference: Class<T>,
+                                                                      val classReference: KClass<T>,
                                                                       val handler : CommandHandler<T>?,
                                                                       val transactionalHandler : TransactionalHandler<T>?,
-                                                                      val metrics : MetricRegistry) : CommsBase(configuration, serviceName, instanceName), MessageListener {
+                                                                      metrics : MetricRegistry) : CommsBase(configuration, serviceName, instanceName, "$serviceName.$instanceName.${classReference.simpleName}.${listenerInstance}"), MessageListener {
 
     private val TEST_SUFFIX_DEFAULT : String = "_test"
     private val configChangeLock : Any = Any()
@@ -82,7 +85,7 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
     }
 
     init {
-        if (classReference.isAssignableFrom(Response::class.java))
+        if (classReference.isSubclassOf(Response::class))
             operationType = OperationType.Reply
         else
             operationType = OperationType.Request
@@ -100,9 +103,9 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
 
     private fun initializeMessaging(configuration: ConfigurationStore) {
 
-        var serviceMode = getServiceMode(serviceModeKey)
-        var instanceMode = getServiceMode(instanceModeKey)
-        var finalMode = serviceMode.Merge(instanceMode)
+        val serviceMode = getServiceMode(serviceModeKey)
+        val instanceMode = getServiceMode(instanceModeKey)
+        val finalMode = serviceMode.Merge(instanceMode)
         logger.xmf_debug_log(serviceName, instanceName, "Starting up messaging in $finalMode mode. Service mode is: $serviceMode, Instance mode is $instanceMode")
         when (finalMode) {
             ServiceMode.Test -> startUpTestMessaging()
@@ -113,7 +116,7 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
     private fun startUpMessaging(destinationName : String) {
         shutDownMessaging()
         logger.xmf_debug_log(serviceName, instanceName, "Starting up messaging subsystem in $destinationName")
-        var inputDestination = session.createQueue(destinationName)
+        val inputDestination = session.createQueue(destinationName)
         consumer = session.createConsumer(inputDestination, getQueueSelector())
         consumer?.messageListener = this
         logger.xmf_debug_log(serviceName, instanceName, "Messaging has been started")
@@ -136,66 +139,74 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
                         serviceName: String,
                         serviceVersion: Version,
                         instanceName: String,
-                        classReference: Class<T>,
-                        handler: CommandHandler<T>) : this(configuration, serviceName, serviceVersion, instanceName, classReference, handler, MetricRegistry())
+                        listenerInstance: Int,
+                        classReference: KClass<T>,
+                        handler: CommandHandler<T>) : this(configuration, serviceName, serviceVersion, instanceName, listenerInstance, classReference, handler, MetricRegistry())
 
     @Inject constructor(configuration: ConfigurationStore,
                         serviceName: String,
                         serviceVersion: Version,
                         instanceName: String,
+                        listenerInstance: Int,
                         commandName: String,
-                        classReference: Class<T>,
-                        handler: CommandHandler<T>) : this(configuration, serviceName, serviceVersion, instanceName, commandName, classReference, handler, null, MetricRegistry())
+                        classReference: KClass<T>,
+                        handler: CommandHandler<T>) : this(configuration, serviceName, serviceVersion, instanceName, listenerInstance, commandName, classReference, handler, null, MetricRegistry())
 
     @Inject constructor(configuration: ConfigurationStore,
                         serviceName: String,
                         serviceVersion: Version,
                         instanceName: String,
+                        listenerInstance: Int,
                         commandName: String,
-                        classReference: Class<T>,
+                        classReference: KClass<T>,
                         handler: CommandHandler<T>,
-                        metrics: MetricRegistry) : this(configuration, serviceName, serviceVersion, instanceName, commandName, classReference, handler, null, metrics)
+                        metrics: MetricRegistry) : this(configuration, serviceName, serviceVersion, instanceName, listenerInstance, commandName, classReference, handler, null, metrics)
 
     @Inject constructor(configuration: ConfigurationStore,
                         serviceName: String,
                         serviceVersion: Version,
                         instanceName: String,
-                        classReference: Class<T>,
+                        listenerInstance: Int,
+                        classReference: KClass<T>,
                         handler: CommandHandler<T>,
-                        registry: MetricRegistry) : this(configuration, serviceName, serviceVersion, instanceName, "$serviceName.${classReference.simpleName}", classReference, handler, null, registry){
+                        registry: MetricRegistry) : this(configuration, serviceName, serviceVersion, instanceName, listenerInstance, "$serviceName.${classReference.simpleName}", classReference, handler, null, registry){
     }
 
     @Inject constructor(configuration: ConfigurationStore,
                         serviceName: String,
                         serviceVersion: Version,
                         instanceName: String,
-                        classReference: Class<T>,
-                        handler: TransactionalHandler<T>) : this(configuration, serviceName, serviceVersion, instanceName, classReference, handler, MetricRegistry())
+                        listenerInstance: Int,
+                        classReference: KClass<T>,
+                        handler: TransactionalHandler<T>) : this(configuration, serviceName, serviceVersion, instanceName, listenerInstance, classReference, handler, MetricRegistry())
 
     @Inject constructor(configuration: ConfigurationStore,
                         serviceName: String,
                         serviceVersion: Version,
                         instanceName: String,
+                        listenerInstance: Int,
                         commandName: String,
-                        classReference: Class<T>,
-                        handler: TransactionalHandler<T>) : this(configuration, serviceName, serviceVersion, instanceName, commandName, classReference, null, handler, MetricRegistry())
+                        classReference: KClass<T>,
+                        handler: TransactionalHandler<T>) : this(configuration, serviceName, serviceVersion, instanceName, listenerInstance, commandName, classReference, null, handler, MetricRegistry())
 
     @Inject constructor(configuration: ConfigurationStore,
                         serviceName: String,
                         serviceVersion: Version,
                         instanceName: String,
+                        listenerInstance: Int,
                         commandName: String,
-                        classReference: Class<T>,
+                        classReference: KClass<T>,
                         handler: TransactionalHandler<T>,
-                        metrics: MetricRegistry) : this(configuration, serviceName, serviceVersion, instanceName, commandName, classReference, null, handler, metrics)
+                        metrics: MetricRegistry) : this(configuration, serviceName, serviceVersion, instanceName, listenerInstance, commandName, classReference, null, handler, metrics)
 
     @Inject constructor(configuration: ConfigurationStore,
                         serviceName: String,
                         serviceVersion: Version,
                         instanceName: String,
-                        classReference: Class<T>,
+                        listenerInstance: Int,
+                        classReference: KClass<T>,
                         handler: TransactionalHandler<T>,
-                        registry: MetricRegistry) : this(configuration, serviceName, serviceVersion, instanceName, "$serviceName.${classReference.simpleName}", classReference, null, handler, registry)
+                        registry: MetricRegistry) : this(configuration, serviceName, serviceVersion, instanceName, listenerInstance,"$serviceName.${classReference.simpleName}", classReference, null, handler, registry)
 
     override fun start(){
         logger.xmf_debug_log(serviceName, instanceName, "Starting API ${operationType} operation: $serviceName - $commandName")
@@ -222,7 +233,7 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
     }
 
     private fun copyMessage(message: TextMessage) : TextMessage {
-        var result = session.createTextMessage(message.text)
+        val result = session.createTextMessage(message.text)
         for (name in message.propertyNames){
             result.setObjectProperty(name as String, message.getObjectProperty(name))
         }
@@ -233,9 +244,9 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
 
         logger.xmf_trace_log(serviceName, instanceName, "Processing json string ${jsonStr}")
 
-        var obj = JacksonHelper.deserialize(jsonStr, classReference)
+        val obj = JacksonHelper.deserialize(jsonStr, classReference.java)
 
-        var context = timing.time()
+        val context = timing.time()
         if (obj.isValid()) {
             var res : HandleAction?
             res = handler?.invoke(obj)
@@ -259,7 +270,7 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
             return res
         }
         else {
-            var errors = obj.validationMessages()
+            val errors = obj.validationMessages()
             if (obj.header != null){
                 logger.error(obj.header!!.context, serviceName, instanceName, "Unable to process request. Validation failed")
                 errors.forEach { logger.error(obj.header!!.context, instanceName, "Validation error msg: $it") }
@@ -276,15 +287,15 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
 
         try {
 
-            var txt = (message as TextMessage).text
+            val txt = (message as TextMessage).text
 
-            var badMsgDestination = session.createQueue(getBadMsgDestinationName())
+            val badMsgDestination = session.createQueue(getBadMsgDestinationName())
 
             try {
 
                 logger.xmf_trace_log(serviceName, instanceName, "Processing message as part of the session ${session.hashCode()}")
 
-                var res = processJsonMsg(txt)
+                val res = processJsonMsg(txt)
 
                 when (res) {
                     HandleAction.Commit -> {
@@ -296,7 +307,7 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
                     }
                     HandleAction.BadMsg -> {
                         val producer = session.createProducer(badMsgDestination)
-                        var resend = copyMessage(message)
+                        val resend = copyMessage(message)
                         resend.setStringProperty("XMF Failure Type", "Handle")
                         producer.send(resend)
                         session.commit()
@@ -307,15 +318,12 @@ internal class ApiOperation<T : Command> @Inject internal constructor(configurat
                 }
             }
             catch (e: Exception) {
-                var resend: Message = message
                 logger.xmf_error_log(serviceName, instanceName, "Failure processing message: ${message.text}", e)
-                if (message is TextMessage) {
-                    resend = copyMessage(message)
-                    resend.setStringProperty("XMF Failure Type", "Exception")
-                    resend.setStringProperty("XMF Failure Message", e.message)
-                    resend.setStringProperty("XMF Failure Root Cause", ExceptionUtils.getRootCauseMessage(e))
-                    resend.setStringProperty("XMF Failure Stacktrace", ExceptionUtils.getStackTrace(e))
-                }
+                val resend = copyMessage(message)
+                resend.setStringProperty("XMF_Failure_Type", "Exception")
+                resend.setStringProperty("XMF_Failure_Message", e.message)
+                resend.setStringProperty("XMF_Failure_Root_Cause", ExceptionUtils.getRootCauseMessage(e))
+                resend.setStringProperty("XMF_Failure_Stacktrace", ExceptionUtils.getStackTrace(e))
                 // TODO: Something failed, we need to take the message and put it into the bad message queue
                 val producer = session.createProducer(badMsgDestination)
                 producer.send(resend)

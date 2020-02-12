@@ -1,4 +1,4 @@
-package com.devfields.xmf.common.microservices.microservices
+package com.devfields.xmf.common.microservices
 
 import com.devfields.xmf.common.configuration.configuration.ConfigurationStore
 import com.devfields.xmf.common.logging.XmfLoggerFactory
@@ -14,7 +14,7 @@ import javax.inject.Inject
 class Messenger @Inject constructor(config : ConfigurationStore,
                                     serviceName : String,
                                     val serviceVersion : Version,
-                                    instanceName : String) : CommsBase(config, serviceName, instanceName) {
+                                    instanceName : String) : CommsBase(config, serviceName, instanceName, "$serviceName.$instanceName.client") {
 
     private val logger = XmfLoggerFactory.getLogger(this::class.java)
 

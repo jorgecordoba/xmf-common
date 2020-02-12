@@ -1,4 +1,4 @@
-package com.devfields.xmf.common.microservices.microservices
+package com.devfields.xmf.common.microservices
 
 /**
  * Created by jco27 on 26/02/2017.

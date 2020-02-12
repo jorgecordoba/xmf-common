@@ -1,4 +1,4 @@
-package com.devfields.xmf.common.microservices.microservices
+package com.devfields.xmf.common.microservices
 
 import com.devfields.xmf.common.configuration.configuration.ConfigurationStore
 import com.devfields.xmf.common.logging.XmfLoggerFactory
@@ -10,6 +10,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import javax.jms.Session
 import kotlin.math.log
+import kotlin.reflect.KClass
 
 /**
  * Created by jco27 on 02/01/2017.
@@ -18,7 +19,7 @@ class ClientBase @JvmOverloads constructor(configurationStore: ConfigurationStor
                                            serviceName : String,
                                            val serviceVersion : Version,
                                            instanceName : String,
-                                           metricsReg: MetricRegistry = MetricRegistry()) : CommsBase(configurationStore, serviceName, instanceName) {
+                                           metricsReg: MetricRegistry = MetricRegistry()) : CommsBase(configurationStore, serviceName, instanceName, "$serviceName.$instanceName.client") {
 
     private val operations : MutableList<ApiOperation<out Command>> = mutableListOf()
     private val metrics : MetricRegistry = metricsReg
@@ -31,7 +32,7 @@ class ClientBase @JvmOverloads constructor(configurationStore: ConfigurationStor
             if (cmd.header?.destination?.name != null) {
                 val dest = session.createQueue(configuration.readValue("services.$serviceName.location", serviceName))
                 val producer = session.createProducer(dest)
-                var msg = createMessage(cmd)
+                val msg = createMessage(cmd)
                 producer.send(msg)
             } else {
                 throw IllegalArgumentException("Destination can't be null")
@@ -58,29 +59,38 @@ class ClientBase @JvmOverloads constructor(configurationStore: ConfigurationStor
         completions[cmdId]!!.add(completableDeferred)
 
         send(cmd)
-        var response = completableDeferred.await() as? T
+        val response = completableDeferred.await() as? T
         if (response == null) {
-            logger.warn(cmd.header.context, serviceName, instanceName, "Received response for command ${cmd.header.type} to ${cmd.header.destination} and id ${cmdId} which was not of expected type")
+            logger.warn(cmd.header!!.context, serviceName, instanceName, "Received response for command ${cmd.header?.type} to ${cmd.header?.destination} and id ${cmdId} which was not of expected type")
         }
         return response
     }
 
     private fun internalResponseHandler(response : Response) : HandleAction {
-        var coroutinesWaiting = completions[response.requestId]
+        val coroutinesWaiting = completions[response.requestId]
         if (null == coroutinesWaiting || coroutinesWaiting.size == 0) {
-            logger.warn(response.header.context, serviceName, instanceName, "Received message without coroutine handler")
+            logger.warn(response.header!!.context, serviceName, instanceName, "Received message without coroutine handler")
             return HandleAction.BadMsg
         }
 
         coroutinesWaiting.forEach { it.complete(response)}
 
-        return HandleAction.Commit;
+        return HandleAction.Commit
     }
 
-    protected fun <T : Response>sendAsync(cmd: Command, classReference:Class<T>) : Deferred<T?> {
-        if (!listeners.contains(classReference.name)) {
-            var op = ApiOperation(configuration, serviceName, serviceVersion, instanceName, "${this.serviceName}.${classReference.simpleName}", classReference, this::internalResponseHandler)
+    protected fun <T : Response>sendAsync(cmd: Command, classReference: KClass<T>) : Deferred<T?> {
+        val name : String = if (classReference.qualifiedName.isNullOrBlank()) {
+            throw InternalError("Invalid class. Unable to obtain qualified name for the passed class")
+        }
+        else {
+            classReference.qualifiedName!!
+        }
+
+
+        if (!listeners.contains(name)) {
+            val op = ApiOperation(configuration, serviceName, serviceVersion, instanceName, 1, "${this.serviceName}.${classReference.simpleName}", classReference, this::internalResponseHandler)
             operations.add(op)
+            listeners.add(name)
             op.start()
         }
 

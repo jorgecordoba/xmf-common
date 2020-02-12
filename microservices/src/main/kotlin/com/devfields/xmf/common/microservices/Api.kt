@@ -1,4 +1,4 @@
-package com.devfields.xmf.common.microservices.microservices
+package com.devfields.xmf.common.microservices
 
 import com.devfields.xmf.common.configuration.configuration.ConfigurationStore
 import com.devfields.xmf.common.logging.XmfLoggerFactory
@@ -13,15 +13,16 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import org.elasticsearch.metrics.ElasticsearchReporter
 import java.util.concurrent.TimeUnit
+import kotlin.reflect.KClass
 
 /**
  * Created by jco27 on 01/01/2017.
  */
-class Api @Inject constructor(configurationStore: ConfigurationStore,
-                              serviceName : String,
+class Api @Inject constructor(val configuration: ConfigurationStore,
+                              val serviceName : String,
                               val serviceVersion : Version,
-                              instanceName: String,
-                              metricsReg: MetricRegistry) : CommsBase(configurationStore, serviceName, instanceName){
+                              val instanceName: String,
+                              metricsReg: MetricRegistry) {
 
     private val operations : MutableList<ApiOperation<out Command>> = mutableListOf()
     private val metrics : MetricRegistry = metricsReg
@@ -53,7 +54,7 @@ class Api @Inject constructor(configurationStore: ConfigurationStore,
 
         try {
             logger.xmf_trace_log(serviceName, instanceName, "Processing request: ${rq.body()}")
-            var result = operation.processJsonMsg(rq.body())
+            val result = operation.processJsonMsg(rq.body())
             when (result){
                 HandleAction.Commit -> rs.status(200)
                 HandleAction.Discard -> rs.status(403)
@@ -74,15 +75,11 @@ class Api @Inject constructor(configurationStore: ConfigurationStore,
     }
 
     init{
-        isRestEnabled = configurationStore.readValue(REST_ENABLE_KEY, REST_ENABLE_DEFAULT).toBoolean()
-        var reporter = ElasticsearchReporter.forRegistry(metrics)
-                                            .hosts("localhost:9200")
-                                            .build()
-        reporter.start(60, TimeUnit.SECONDS)
+        isRestEnabled = configuration.readValue(REST_ENABLE_KEY, REST_ENABLE_DEFAULT).toBoolean()
 
         var port : Int
         try {
-            port = configurationStore.readValue(REST_PORT_KEY, REST_PORT_DEFAULT).toInt()
+            port = configuration.readValue(REST_PORT_KEY, REST_PORT_DEFAULT).toInt()
         }
         catch (ex : NumberFormatException) {
             port = 0
@@ -101,52 +98,50 @@ class Api @Inject constructor(configurationStore: ConfigurationStore,
             Spark.post("/${serviceName}/${operation.commandName}", fun (rq : Request, rs : Response) : Any  = handlePost(rq, rs, operation))
     }
 
-    @JvmOverloads fun <T : Command>registerOperation(classReference: Class<T>, handler: CommandHandler<T>, listeners : Int = 1){
+    @JvmOverloads fun <T : Command>registerOperation(classReference: KClass<T>, handler: CommandHandler<T>, listeners : Int = 1){
         for (i in 1..listeners) {
-            var instance = ApiOperation(configuration, serviceName, serviceVersion, instanceName, classReference, handler, metrics)
+            val instance = ApiOperation(configuration, serviceName, serviceVersion, instanceName, i, classReference, handler, metrics)
             setUpRestInterface(instance)
             operations.add(instance)
         }
     }
 
-    @JvmOverloads fun <T : Command>registerOperation(commandName : String, classReference: Class<T>, handler: CommandHandler<T>, listeners : Int = 1){
+    @JvmOverloads fun <T : Command>registerOperation(commandName : String, classReference: KClass<T>, handler: CommandHandler<T>, listeners : Int = 1){
         for (i in 1..listeners) {
-            var instance = ApiOperation(configuration, serviceName, serviceVersion, instanceName, commandName, classReference, handler, metrics)
+            val instance = ApiOperation(configuration, serviceName, serviceVersion, instanceName, i, commandName, classReference, handler, metrics)
             setUpRestInterface(instance)
             operations.add(instance)
         }
     }
 
-    @JvmOverloads fun <T : Command>registerOperation(classReference: Class<T>, handler: TransactionalHandler<T>, listeners: Int = 1) {
+    @JvmOverloads fun <T : Command>registerOperation(classReference: KClass<T>, handler: TransactionalHandler<T>, listeners: Int = 1) {
         for (i in 1..listeners){
-            var instance = ApiOperation(configuration, serviceName, serviceVersion, instanceName, classReference, handler, metrics)
+            val instance = ApiOperation(configuration, serviceName, serviceVersion, instanceName, i, classReference, handler, metrics)
             setUpRestInterface(instance)
             operations.add(instance)
         }
     }
 
-    @JvmOverloads fun <T : Command>registerOperation(commandName: String, classReference: Class<T>, handler: TransactionalHandler<T>, listeners: Int = 1){
+    @JvmOverloads fun <T : Command>registerOperation(commandName: String, classReference: KClass<T>, handler: TransactionalHandler<T>, listeners: Int = 1){
         for (i in 1..listeners){
-            var instance = ApiOperation(configuration, serviceName, serviceVersion, instanceName, commandName, classReference, handler, metrics)
+            val instance = ApiOperation(configuration, serviceName, serviceVersion, instanceName, i, commandName, classReference, handler, metrics)
             setUpRestInterface(instance)
             operations.add(instance)
         }
     }
 
-    override fun start(){
-        super.start()
+    fun start(){
         for (x in operations){
             x.start()
         }
         started = true
     }
 
-    override fun stop() {
-        super.stop()
+    fun stop() {
         for (x in operations){
             x.stop()
         }
-        spark.Spark.stop()
+        Spark.stop()
         started = false
     }
 
